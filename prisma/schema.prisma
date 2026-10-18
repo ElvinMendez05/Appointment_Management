@@ -1,0 +1,217 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  STAFF
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  IN_SERVICE
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+// BUSINESS
+
+model Business {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String   @unique
+  description String?
+  email       String?
+  phone       String?
+  address     String?
+  timezone    String   @default("America/Santo_Domingo")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users         User[]
+  employees     Employee[]
+  customers     Customer[]
+  services      Service[]
+  businessHours BusinessHour[]
+  appointments  Appointment[]
+
+  @@map("businesses")
+}
+
+// USER
+
+model User {
+  id         String   @id @default(uuid()) @db.Uuid
+  businessId String   @db.Uuid
+  name       String
+  email      String   @unique
+  password   String
+  role       UserRole @default(STAFF)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@map("users")
+}
+
+// EMPLOYEE
+
+model Employee {
+  id         String   @id @default(uuid()) @db.Uuid
+  businessId String   @db.Uuid
+  name       String
+  email      String?
+  phone      String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business     Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  services     EmployeeService[]
+  hours        EmployeeHour[]
+  appointments Appointment[]
+
+  @@index([businessId])
+  @@map("employees")
+}
+
+// CUSTOMER
+
+model Customer {
+  id         String   @id @default(uuid()) @db.Uuid
+  businessId String   @db.Uuid
+  name       String
+  email      String?
+  phone      String?
+  notes      String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([businessId])
+  @@map("customers")
+}
+
+// SERVICE
+
+model Service {
+  id          String   @id @default(uuid()) @db.Uuid
+  businessId  String   @db.Uuid
+  name        String
+  description String?
+  duration    Int
+  price       Decimal  @db.Decimal(10, 2)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business     Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employees    EmployeeService[]
+  appointments Appointment[]
+
+  @@index([businessId])
+  @@map("services")
+}
+
+// EMPLOYEE SERVICE (N:M)
+
+model EmployeeService {
+  employeeId String @db.Uuid
+  serviceId  String @db.Uuid
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  service  Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([employeeId, serviceId])
+  @@index([serviceId])
+  @@map("employee_services")
+}
+
+// BUSINESS HOURS
+
+model BusinessHour {
+  id         String    @id @default(uuid()) @db.Uuid
+  businessId String    @db.Uuid
+  dayOfWeek  DayOfWeek
+  isOpen     Boolean   @default(true)
+  startTime  String    @db.VarChar(5)
+  endTime    String    @db.VarChar(5)
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, dayOfWeek])
+  @@map("business_hours")
+}
+
+// EMPLOYEE HOURS
+
+model EmployeeHour {
+  id         String    @id @default(uuid()) @db.Uuid
+  employeeId String    @db.Uuid
+  dayOfWeek  DayOfWeek
+  isWorking  Boolean   @default(true)
+  startTime  String    @db.VarChar(5)
+  endTime    String    @db.VarChar(5)
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, dayOfWeek])
+  @@map("employee_hours")
+}
+
+// APPOINTMENT
+
+model Appointment {
+  id         String            @id @default(uuid()) @db.Uuid
+  businessId String            @db.Uuid
+  customerId String            @db.Uuid
+  employeeId String            @db.Uuid
+  serviceId  String            @db.Uuid
+  startAt    DateTime
+  endAt      DateTime
+  status     AppointmentStatus @default(PENDING)
+  notes      String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  service  Service  @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+
+  @@index([businessId, startAt])
+  @@index([employeeId, startAt, endAt])
+  @@index([customerId])
+  @@map("appointments")
+}
